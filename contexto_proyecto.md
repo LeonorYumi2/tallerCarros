@@ -45,6 +45,7 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env 
 
 # typescript
 *.tsbuildinfo
@@ -152,6 +153,28 @@ Docs: https://docs.expo.dev/eas/index.md
 
 
 ================================================
+ðŸ“„ ARCHIVO: dist\metadata.json
+================================================
+
+{"version":0,"bundler":"metro","fileMetadata":{"android":{"bundle":"_expo/static/js/android/entry-d1a326c4527e917c16683e2d3388f4ed.hbc","assets":[{"path":"assets\\6b4f0c2d698edccb36b0f132059c0205","ext":"ttf"},{"path":"assets\\0a328cd9c1afd0afe8e3b1ec5165b1b4","ext":"png"},{"path":"assets\\778ffc9fe8773a878e9c30a6304784de","ext":"png"},{"path":"assets\\c79c3606a1cf168006ad3979763c7e0c","ext":"png"},{"path":"assets\\02bc1fa7c0313217bde2d65ccbff40c9","ext":"png"},{"path":"assets\\35ba0eaec5a4f5ed12ca16fabeae451d","ext":"png"},{"path":"assets\\3cd68ccdb8938e3711da2e8831b85493","ext":"png"},{"path":"assets\\61ca7e64b7d605716c57706cef640b9a","ext":"png"},{"path":"assets\\aff2c65b39a296d4f7e96d0f58169170","ext":"png"},{"path":"assets\\d8e7601e3df962f83c62371ac14964d8","ext":"png"},{"path":"assets\\0747a1317bbe9c6fc340b889ef8ab3ae","ext":"png"},{"path":"assets\\d84e297c3b3e49a614248143d53e40ca","ext":"png"},{"path":"assets\\1190ab078c57159f4245a328118fcd9a","ext":"png"},{"path":"assets\\78c625386b4d0690b421eb0fc78f7b9c","ext":"png"},{"path":"assets\\4403c6117ec30c859bc95d70ce4a71d3","ext":"png"},{"path":"assets\\069d99eb1fa6712c0b9034a58c6b57dd","ext":"png"},{"path":"assets\\c3273c9e5321f20d1e42c2efae2578c4","ext":"png"},{"path":"assets\\286d67d3f74808a60a78d3ebf1a5fb57","ext":"png"},{"path":"assets\\d1ea1496f9057eb392d5bbf3732a61b7","ext":"png"},{"path":"assets\\19eeb73b9593a38f8e9f418337fc7d10","ext":"png"},{"path":"assets\\ab19f4cbc543357183a20571f68380a3","ext":"png"},{"path":"assets\\d8b800c443b8972542883e0b9de2bdc6","ext":"png"},{"path":"assets\\412dd9275b6b48ad28f5e3d81bb1f626","ext":"png"},{"path":"assets\\017bc6ba3fc25503e5eb5e53826d48a8","ext":"png"},{"path":"assets\\20e71bdf79e3a97bf55fd9e164041578","ext":"png"},{"path":"assets\\98a4e3d00dbf5d65da99a69b38a7def2","ext":"xml"},{"path":"assets\\9b5cb09b4e669ed0f28f3b3f2871a0a5","ext":"xml"}]}}}
+
+================================================
+ðŸ“„ ARCHIVO: eslint.config.js
+================================================
+
+// https://docs.expo.dev/guides/using-eslint/
+const { defineConfig } = require('eslint/config');
+const expoConfig = require("eslint-config-expo/flat");
+
+module.exports = defineConfig([
+  expoConfig,
+  {
+    ignores: ["dist/*"],
+  }
+]);
+
+
+================================================
 ðŸ“„ ARCHIVO: expo-env.d.ts
 ================================================
 
@@ -169,6 +192,7 @@ Docs: https://docs.expo.dev/eas/index.md
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~57.0.26",
+    "@tanstack/react-form": "^1.33.5",
     "@tanstack/react-query": "^5.104.5",
     "axios": "^1.20.0",
     "expo": "~57.0.31",
@@ -196,6 +220,8 @@ Docs: https://docs.expo.dev/eas/index.md
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -397,8 +423,8 @@ rl.question(
 ================================================
 
 //importar el cliente axios y el tipo de carro
-import {client} from './client'
-import {Carro} from '../types/carro'
+import { client } from './client'
+import type { Carro, CarroInput } from '../types/carro'
 
 //Definir un servicio llamado carroService
 //el Servicio centraliza las operaciones de la entidad carro
@@ -413,9 +439,18 @@ export const carrosService ={
     },
 
     //MEtodo POST: agregar un nuevo carro, retornar la promesa con el objeto creado
-add: async (marca: string): Promise<Carro> => {
-        const { data } = await client.post<Carro>('patio', { marca })
+    add: async (carro: CarroInput): Promise<Carro> => {
+        const { data } = await client.post<Carro>('patio', carro)
         return data
+    },
+
+    update: async (id: string, carro: CarroInput): Promise<Carro> => {
+        const { data } = await client.put<Carro>(`patio/${id}`, carro)
+        return data
+    },
+
+    remove: async (id: string): Promise<void> => {
+        await client.delete(`patio/${id}`)
     }
 }
 
@@ -438,80 +473,1007 @@ export const client = axios.create({
 ðŸ“„ ARCHIVO: src\app\explore.tsx
 ================================================
 
-import {useEffect, useState} from 'react'
-import {View, Text, FlatList} from 'react-native'
-import {Carro} from '../types/carro'
-import {carrosService} from '../api/carros.service'
-import {useCarros} from '../hooks/useCarros'
+import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import { useCarros } from '../hooks/useCarros';
+import { formatCarroNumber } from '../utils/carros';
+import { PatiotuercaColors } from '../constants/theme';
 
-export default function Explore(){
+const palette = {
+  background: PatiotuercaColors.background,
+  primary: PatiotuercaColors.primary,
+  secondary: PatiotuercaColors.secondary,
+  text: PatiotuercaColors.text,
+  muted: PatiotuercaColors.muted,
+  border: PatiotuercaColors.secondary,
+};
 
-//Misma queryKey que index: comparten la cache con esa vista, asi que no se repite el Get
-//Peroo mientras los datos esten frescos
-const {data: carros = []} = useCarros()
+export default function Explore() {
+  const { data: carros = [], isLoading, error } = useCarros();
 
-  return(
-    <View style = {{flex:1, paddingTop: 60, backgroundColor: '#fff'}}>
-      <FlatList
-        data={carros}
-        keyExtractor = {item => item.id}
-        renderItem={({item}) => <Text>{item.id} -{item.marca}</Text>}
-      />
-    </View>
-  )
+  return (
+    <FlatList
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+      data={carros}
+      keyExtractor={(item) => item.id}
+      ListHeaderComponent={
+        <View style={styles.header}>
+          <Text style={styles.eyebrow}>PATIO TUERCA</Text>
+          <Text style={styles.title}>Explora el inventario</Text>
+          <Text style={styles.subtitle}>
+            Revisa los vehículos disponibles y sus características.
+          </Text>
+          <View style={styles.accent} />
+        </View>
+      }
+      ListEmptyComponent={
+        <View style={styles.emptyCard}>
+          {isLoading ? (
+            <>
+              <ActivityIndicator color={palette.primary} />
+              <Text style={styles.emptyText}>Cargando vehículos...</Text>
+            </>
+          ) : error ? (
+            <Text style={styles.errorText}>No se pudo cargar el inventario: {error.message}</Text>
+          ) : (
+            <Text style={styles.emptyText}>No hay vehículos disponibles por el momento.</Text>
+          )}
+        </View>
+      }
+      renderItem={({ item }) => {
+        const precio = formatCarroNumber(item.precio);
+        const kilometraje = formatCarroNumber(item.kilometraje);
+
+        return (
+          <View style={styles.carCard}>
+            <View style={styles.carIcon}>
+              <Text style={styles.carIconText}>
+                {(item.marca || 'C').slice(0, 1).toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.carInfo}>
+              <Text style={styles.carTitle}>
+                {item.marca || 'Marca no disponible'} {item.modelo || ''}
+              </Text>
+              <Text style={styles.carDetails}>
+                {item.anio || 'Año no disponible'} · {item.color || 'Color no disponible'}
+              </Text>
+              <Text style={styles.carDetails}>
+                {kilometraje === null ? 'Kilometraje no disponible' : `${kilometraje} km`}
+              </Text>
+            </View>
+            <View style={styles.priceTag}>
+              <Text style={styles.priceText}>
+                {precio === null ? 'Precio no disponible' : `$${precio}`}
+              </Text>
+            </View>
+          </View>
+        );
+      }}
+    />
+  );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: palette.background,
+  },
+  content: {
+    flexGrow: 1,
+    paddingBottom: 28,
+  },
+  header: {
+    backgroundColor: palette.primary,
+    paddingHorizontal: 22,
+    paddingTop: 58,
+    paddingBottom: 27,
+  },
+  eyebrow: {
+    color: palette.background,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  title: {
+    color: palette.background,
+    fontSize: 26,
+    lineHeight: 33,
+    fontWeight: '800',
+    marginTop: 12,
+  },
+  subtitle: {
+    color: palette.background,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 7,
+  },
+  accent: {
+    width: 48,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: palette.secondary,
+    marginTop: 20,
+  },
+  emptyCard: {
+    minHeight: 112,
+    margin: 16,
+    padding: 20,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    color: palette.muted,
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  errorText: {
+    color: palette.primary,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  carCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: 14,
+    padding: 15,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.background,
+    shadowColor: palette.text,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  carIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: palette.secondary,
+  },
+  carIconText: {
+    color: palette.primary,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  carInfo: {
+    flex: 1,
+  },
+  carTitle: {
+    color: palette.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  carDetails: {
+    color: palette.muted,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  priceTag: {
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    backgroundColor: palette.secondary,
+  },
+  priceText: {
+    color: palette.text,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+});
+
 
 ================================================
 ðŸ“„ ARCHIVO: src\app\index.tsx
 ================================================
 
-import { useState } from 'react';
-import { Button, FlatList, Text, TextInput, View } from 'react-native';
-import { useAgregarCarro, useCarros } from '../hooks/useCarros';
+import { useRef, useState } from 'react';
+import { useForm } from '@tanstack/react-form';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import {
+  useAgregarCarro,
+  useCarros,
+  useCarrosEliminandoIds,
+  useEditarCarro,
+  useEliminarCarro,
+} from '../hooks/useCarros';
+import type { Carro, CarroInput } from '../types/carro';
+import { formatCarroNumber } from '../utils/carros';
+import { PatiotuercaColors } from '../constants/theme';
+
+interface CarroFormValues {
+  marca: string;
+  anio: string;
+  modelo: string;
+  color: string;
+  kilometraje: string;
+  precio: string;
+}
+
+const EMPTY_FORM: CarroFormValues = {
+  marca: '',
+  anio: '',
+  modelo: '',
+  color: '',
+  kilometraje: '',
+  precio: '',
+};
+
+const currentYear = new Date().getFullYear();
+
+function validateRequired(value: string, label: string) {
+  return value.trim() ? undefined : `${label} es obligatorio.`;
+}
+
+function validateYear(value: string) {
+  if (!value.trim()) return 'El año es obligatorio.';
+  const year = Number(value);
+  return Number.isInteger(year) && year >= 1900 && year <= currentYear
+    ? undefined
+    : `Ingresa un año entre 1900 y ${currentYear}.`;
+}
+
+function validatePositiveNumber(value: string, label: string) {
+  if (!value.trim()) return `${label} es obligatorio.`;
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0
+    ? undefined
+    : `${label} debe ser mayor que 0.`;
+}
+
+function isCarroFormValid(values: CarroFormValues) {
+  return [
+    validateRequired(values.marca, 'La marca'),
+    validateRequired(values.modelo, 'El modelo'),
+    validateYear(values.anio),
+    validateRequired(values.color, 'El color'),
+    validatePositiveNumber(values.kilometraje, 'El kilometraje'),
+    validatePositiveNumber(values.precio, 'El precio'),
+  ].every((error) => error === undefined);
+}
+
+function toCarroInput(values: CarroFormValues): CarroInput {
+  return {
+    marca: values.marca.trim(),
+    anio: Number(values.anio),
+    modelo: values.modelo.trim(),
+    color: values.color.trim(),
+    kilometraje: Number(values.kilometraje),
+    precio: Number(values.precio),
+  };
+}
+
+function toFormValues(carro: Carro): CarroFormValues {
+  return {
+    marca: carro.marca ?? '',
+    anio: String(carro.anio ?? ''),
+    modelo: carro.modelo ?? '',
+    color: carro.color ?? '',
+    kilometraje: String(carro.kilometraje ?? ''),
+    precio: String(carro.precio ?? ''),
+  };
+}
 
 export default function App() {
+  const [carroEditando, setCarroEditando] = useState<Carro | null>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const listRef = useRef<FlatList<Carro> | null>(null);
+  const { data: carros = [], isLoading, error } = useCarros();
+  const agregarMutation = useAgregarCarro();
+  const editarMutation = useEditarCarro();
+  const eliminarMutation = useEliminarCarro();
+  const eliminandoIds = useCarrosEliminandoIds();
+  const guardando = agregarMutation.isPending || editarMutation.isPending;
 
-  // Estado para manejar la marca ingresada
-  const [marca, setMarca] = useState('');
+  const form = useForm({
+    defaultValues: EMPTY_FORM,
+    onSubmit: async ({ value }) => {
+      const carro = toCarroInput(value);
+      if (carroEditando) {
+        await editarMutation.mutateAsync({ id: carroEditando.id, carro });
+      } else {
+        await agregarMutation.mutateAsync(carro);
+      }
+      form.reset(EMPTY_FORM);
+      setCarroEditando(null);
+    },
+  });
 
-  //get de tanstack query para manejar la carga, el cache y los estados
-  const {data:carros = [], isLoading, error} = useCarros()
-
-  //post: la mutacion invalida de la query carros y la lista se refresca
-  const{mutate: agregarCarro} = useAgregarCarro()
-
-  //POST: funcion para agregar un nuevo carro
-
-  const agregar = async () => {
-    agregarCarro(marca, {onSuccess:()=> setMarca('')})
+  const cancelarEdicion = () => {
+    form.reset(EMPTY_FORM);
+    setCarroEditando(null);
+    setSubmissionError(null);
   };
 
-  //isLoading y error 
-  //isLoading es true solo durante la primera carga, cuando aun no hay datos
-  //Mientras tanto mostramos un texto en lugar de la pantalla con la lista vacia 
-  if(isLoading) return <Text> Cargando ... </Text>
-  //Si el get fallo (sin red, servidor, caido, etc) 'el metodo traer' trae la excepcion
-  //Mostramos un mensaje y no seguimos al return principal 
-  if(error) return <Text>Error: {error.message}</Text>
+  const editar = (carro: Carro) => {
+    const values = toFormValues(carro);
+    form.reset(values);
+    form.setFieldValue('marca', values.marca);
+    form.setFieldValue('anio', values.anio);
+    form.setFieldValue('modelo', values.modelo);
+    form.setFieldValue('color', values.color);
+    form.setFieldValue('kilometraje', values.kilometraje);
+    form.setFieldValue('precio', values.precio);
+    setCarroEditando(carro);
+    setSubmissionError(null);
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  };
 
-return(
-    <View style = {{flex:1, paddingTop:60, backgroundColor: '#fff'}}>
-    <TextInput
-        value={marca}
-        onChangeText = {setMarca}
-        style = {{borderWidth:3}}
-    />
-    <Button title= "Agregar" onPress={agregar} />
+  const guardar = () => {
+    setSubmissionError(null);
+    void form.handleSubmit().catch((submitError: unknown) => {
+      setSubmissionError(
+        submitError instanceof Error
+          ? submitError.message
+          : 'Ocurrió un error inesperado al guardar el carro.',
+      );
+    });
+  };
+
+  const confirmarEliminacion = (carro: Carro) => {
+    Alert.alert(
+      'Eliminar carro',
+      `¿Deseas eliminar ${carro.marca} ${carro.modelo}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: () => eliminarMutation.mutate(carro.id),
+        },
+      ],
+    );
+  };
+
+  const renderInput = (
+    label: string,
+    value: string,
+    onChangeText: (value: string) => void,
+    onBlur: () => void,
+    errors: readonly unknown[],
+    showError: boolean,
+    keyboardType: 'default' | 'number-pad' | 'decimal-pad' = 'default',
+    autoCapitalize: 'none' | 'sentences' | 'words' = 'sentences',
+  ) => (
+    <>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        accessibilityLabel={label}
+        placeholder={label}
+        placeholderTextColor={colors.muted}
+        value={value}
+        onChangeText={(nextValue) => {
+          setSubmissionError(null);
+          onChangeText(nextValue);
+        }}
+        onBlur={onBlur}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        style={[styles.input, showError && errors.length > 0 && styles.inputError]}
+      />
+      {showError && errors.map((fieldError, index) => (
+        <Text key={`${label}-${index}`} style={styles.fieldError}>
+          {String(fieldError)}
+        </Text>
+      ))}
+    </>
+  );
+
+  if (isLoading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Cargando inventario...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>No se pudieron cargar los carros: {error.message}</Text>
+      </View>
+    );
+  }
+
+  return (
     <FlatList
-        data={carros}
-        keyExtractor = {item => item.id}
-        renderItem={({item}) =>
-            <Text>{item.id} - {item.marca}</Text>
-        }
+      ref={listRef}
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+      data={carros}
+      keyExtractor={(item) => item.id}
+      extraData={carroEditando?.id}
+      ListHeaderComponent={
+        <View>
+          <View style={styles.hero}>
+            <Text style={styles.brandEyebrow}>PATIO TUERCA</Text>
+            <Text style={styles.heroTitle}>Tu próximo carro empieza aquí</Text>
+            <Text style={styles.heroSubtitle}>
+              Administra tu inventario de forma simple y segura.
+            </Text>
+            <View style={styles.accent} />
+          </View>
+
+          <View style={styles.formCard}>
+            <Text style={styles.sectionEyebrow}>
+              {carroEditando ? 'ACTUALIZA LA INFORMACIÓN' : 'NUEVA PUBLICACIÓN'}
+            </Text>
+            <Text style={styles.sectionTitle}>
+              {carroEditando ? 'Editar carro' : 'Agregar un carro'}
+            </Text>
+            <Text style={styles.helperText}>
+              Completa los datos para mantener tu inventario al día.
+            </Text>
+
+            <form.Field
+              name="marca"
+              validators={{
+                onMount: ({ value }) => validateRequired(value, 'La marca'),
+                onChange: ({ value }) => validateRequired(value, 'La marca'),
+                onBlur: ({ value }) => validateRequired(value, 'La marca'),
+                onSubmit: ({ value }) => validateRequired(value, 'La marca'),
+              }}
+            >
+              {(field) => renderInput(
+                'Marca',
+                field.state.value,
+                field.handleChange,
+                field.handleBlur,
+                field.state.meta.errors,
+                field.state.meta.isTouched || field.state.meta.isDirty,
+              )}
+            </form.Field>
+
+            <form.Field
+              name="modelo"
+              validators={{
+                onMount: ({ value }) => validateRequired(value, 'El modelo'),
+                onChange: ({ value }) => validateRequired(value, 'El modelo'),
+                onBlur: ({ value }) => validateRequired(value, 'El modelo'),
+                onSubmit: ({ value }) => validateRequired(value, 'El modelo'),
+              }}
+            >
+              {(field) => renderInput(
+                'Modelo',
+                field.state.value,
+                field.handleChange,
+                field.handleBlur,
+                field.state.meta.errors,
+                field.state.meta.isTouched || field.state.meta.isDirty,
+              )}
+            </form.Field>
+
+            <View style={styles.fieldRow}>
+              <View style={styles.fieldHalf}>
+                <form.Field
+                  name="anio"
+                  validators={{
+                    onMount: ({ value }) => validateYear(value),
+                    onChange: ({ value }) => validateYear(value),
+                    onBlur: ({ value }) => validateYear(value),
+                    onSubmit: ({ value }) => validateYear(value),
+                  }}
+                >
+                  {(field) => renderInput(
+                    'Año',
+                    field.state.value,
+                    field.handleChange,
+                    field.handleBlur,
+                    field.state.meta.errors,
+                    field.state.meta.isTouched || field.state.meta.isDirty,
+                    'number-pad',
+                  )}
+                </form.Field>
+              </View>
+              <View style={styles.fieldHalf}>
+                <form.Field
+                  name="color"
+                  validators={{
+                    onMount: ({ value }) => validateRequired(value, 'El color'),
+                    onChange: ({ value }) => validateRequired(value, 'El color'),
+                    onBlur: ({ value }) => validateRequired(value, 'El color'),
+                    onSubmit: ({ value }) => validateRequired(value, 'El color'),
+                  }}
+                >
+                  {(field) => renderInput(
+                    'Color',
+                    field.state.value,
+                    field.handleChange,
+                    field.handleBlur,
+                    field.state.meta.errors,
+                    field.state.meta.isTouched || field.state.meta.isDirty,
+                  )}
+                </form.Field>
+              </View>
+            </View>
+
+            <form.Field
+              name="kilometraje"
+              validators={{
+                onMount: ({ value }) => validatePositiveNumber(value, 'El kilometraje'),
+                onChange: ({ value }) => validatePositiveNumber(value, 'El kilometraje'),
+                onBlur: ({ value }) => validatePositiveNumber(value, 'El kilometraje'),
+                onSubmit: ({ value }) => validatePositiveNumber(value, 'El kilometraje'),
+              }}
+            >
+              {(field) => renderInput(
+                'Kilometraje',
+                field.state.value,
+                field.handleChange,
+                field.handleBlur,
+                field.state.meta.errors,
+                field.state.meta.isTouched || field.state.meta.isDirty,
+                'decimal-pad',
+              )}
+            </form.Field>
+
+            <form.Field
+              name="precio"
+              validators={{
+                onMount: ({ value }) => validatePositiveNumber(value, 'El precio'),
+                onChange: ({ value }) => validatePositiveNumber(value, 'El precio'),
+                onBlur: ({ value }) => validatePositiveNumber(value, 'El precio'),
+                onSubmit: ({ value }) => validatePositiveNumber(value, 'El precio'),
+              }}
+            >
+              {(field) => renderInput(
+                'Precio (USD)',
+                field.state.value,
+                field.handleChange,
+                field.handleBlur,
+                field.state.meta.errors,
+                field.state.meta.isTouched || field.state.meta.isDirty,
+                'decimal-pad',
+              )}
+            </form.Field>
+
+            {submissionError ? (
+              <Text style={styles.errorText}>
+                No se pudo {carroEditando ? 'actualizar' : 'agregar'} el carro: {submissionError}
+              </Text>
+            ) : null}
+            {eliminarMutation.isError && (
+              <Text style={styles.errorText}>
+                No se pudo eliminar el carro: {eliminarMutation.error.message}
+              </Text>
+            )}
+
+            <form.Subscribe
+              selector={(state) => [state.canSubmit, state.isSubmitting, state.values] as const}
+            >
+              {([canSubmit, isSubmitting, values]) => {
+                const disabled =
+                  !canSubmit || !isCarroFormValid(values) || isSubmitting || guardando;
+                return (
+                  <View style={styles.formActions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={guardar}
+                      disabled={disabled}
+                      style={[styles.primaryButton, disabled && styles.buttonDisabled]}
+                    >
+                      {isSubmitting || guardando ? (
+                        <ActivityIndicator color={colors.background} />
+                      ) : (
+                        <Text style={styles.primaryButtonText}>
+                          {carroEditando ? 'Guardar cambios' : 'Publicar carro'}
+                        </Text>
+                      )}
+                    </Pressable>
+                    {carroEditando && (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={cancelarEdicion}
+                        disabled={guardando}
+                        style={styles.secondaryButton}
+                      >
+                        <Text style={styles.secondaryButtonText}>Cancelar edición</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              }}
+            </form.Subscribe>
+          </View>
+
+          <View style={styles.inventoryHeading}>
+            <View>
+              <Text style={styles.sectionEyebrow}>ENCUENTRA TU OPCIÓN</Text>
+              <Text style={styles.sectionTitle}>Carros disponibles</Text>
+            </View>
+            <Text style={styles.countBadge}>{carros.length}</Text>
+          </View>
+        </View>
+      }
+      ListEmptyComponent={
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>Aún no hay carros publicados</Text>
+          <Text style={styles.helperText}>Agrega el primero desde el formulario.</Text>
+        </View>
+      }
+      renderItem={({ item }) => {
+        const precio = formatCarroNumber(item.precio);
+        const kilometraje = formatCarroNumber(item.kilometraje);
+        const eliminando = eliminandoIds.includes(item.id);
+
+        return (
+          <View style={styles.carCard}>
+            <View style={styles.carCardHeader}>
+              <View style={styles.carIcon}>
+                <Text style={styles.carIconText}>
+                  {(item.marca || 'C').slice(0, 1).toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.carHeading}>
+                <Text style={styles.carTitle}>
+                  {item.marca || 'Marca no disponible'} {item.modelo || ''}
+                </Text>
+                <Text style={styles.carSubtitle}>
+                  {item.anio ? `Año ${item.anio}` : 'Año no disponible'} · {item.color || 'Color no disponible'}
+                </Text>
+              </View>
+              <View style={styles.priceTag}>
+                <Text style={styles.priceText}>
+                  {precio === null ? 'Precio no disponible' : `$${precio}`}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.cardDivider} />
+            <View style={styles.cardFooter}>
+              <Text style={styles.mileageText}>
+                {kilometraje === null ? 'Kilometraje no disponible' : `${kilometraje} km`}
+              </Text>
+              <View style={styles.cardActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => editar(item)}
+                  disabled={guardando || eliminarMutation.isPending}
+                  style={styles.editButton}
+                >
+                  <Text style={styles.editButtonText}>Editar</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => confirmarEliminacion(item)}
+                  disabled={eliminandoIds.length > 0}
+                  style={[styles.deleteButton, eliminando && styles.buttonDisabled]}
+                >
+                  <Text style={styles.deleteButtonText}>
+                    {eliminando ? 'Eliminando...' : 'Eliminar'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        );
+      }}
     />
-    </View>
-)
+  );
 }
+
+const colors = {
+  background: PatiotuercaColors.background,
+  primary: PatiotuercaColors.primary,
+  secondary: PatiotuercaColors.secondary,
+  text: PatiotuercaColors.text,
+  muted: PatiotuercaColors.muted,
+  error: PatiotuercaColors.primary,
+};
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  content: {
+    paddingBottom: 36,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: colors.background,
+  },
+  loadingText: {
+    color: colors.muted,
+    marginTop: 12,
+    fontSize: 15,
+  },
+  hero: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 22,
+    paddingTop: 58,
+    paddingBottom: 27,
+  },
+  brandEyebrow: {
+    color: colors.background,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  heroTitle: {
+    color: colors.background,
+    fontSize: 27,
+    lineHeight: 34,
+    fontWeight: '800',
+    marginTop: 12,
+  },
+  heroSubtitle: {
+    color: colors.background,
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 7,
+  },
+  accent: {
+    width: 48,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.secondary,
+    marginTop: 20,
+  },
+  formCard: {
+    backgroundColor: colors.background,
+    marginHorizontal: 16,
+    marginTop: 18,
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: colors.secondary,
+    shadowColor: colors.text,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  sectionEyebrow: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: 21,
+    fontWeight: '800',
+    marginTop: 5,
+  },
+  helperText: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  label: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 11,
+    marginBottom: 6,
+  },
+  input: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: colors.secondary,
+    borderRadius: 9,
+    backgroundColor: colors.background,
+    color: colors.text,
+    paddingHorizontal: 13,
+    fontSize: 15,
+  },
+  inputError: {
+    borderColor: colors.error,
+  },
+  fieldError: {
+    color: colors.error,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  fieldHalf: {
+    flex: 1,
+  },
+  errorText: {
+    color: colors.error,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 12,
+  },
+  formActions: {
+    marginTop: 20,
+    gap: 9,
+  },
+  primaryButton: {
+    minHeight: 50,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  primaryButtonText: {
+    color: colors.background,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  buttonDisabled: {
+    opacity: 0.55,
+  },
+  secondaryButton: {
+    minHeight: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  inventoryHeading: {
+    marginHorizontal: 18,
+    marginTop: 27,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  countBadge: {
+    minWidth: 32,
+    height: 32,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: colors.secondary,
+    color: colors.text,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    fontSize: 14,
+    fontWeight: '800',
+    paddingTop: 6,
+  },
+  emptyCard: {
+    marginHorizontal: 16,
+    padding: 20,
+    borderRadius: 14,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.secondary,
+  },
+  emptyTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  carCard: {
+    backgroundColor: colors.background,
+    borderRadius: 14,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.secondary,
+    shadowColor: colors.text,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  carCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+  },
+  carIcon: {
+    height: 42,
+    width: 42,
+    borderRadius: 12,
+    backgroundColor: colors.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  carIconText: {
+    color: colors.primary,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  carHeading: {
+    flex: 1,
+  },
+  carTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  carSubtitle: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  priceTag: {
+    backgroundColor: colors.secondary,
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+  },
+  priceText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: colors.secondary,
+    marginVertical: 13,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  mileageText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editButton: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  editButtonText: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  deleteButton: {
+    borderRadius: 8,
+    backgroundColor: colors.secondary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  deleteButtonText: {
+    color: colors.error,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+});
+
 
 ================================================
 ðŸ“„ ARCHIVO: src\app\_layout.tsx
@@ -1275,20 +2237,28 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+export const PatiotuercaColors = {
+  primary: '#E72927',
+  background: '#FCEEF2',
+  secondary: '#EDCABF',
+  text: '#201B17',
+  muted: '#756665',
+} as const;
+
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: PatiotuercaColors.text,
+    background: PatiotuercaColors.background,
+    backgroundElement: PatiotuercaColors.secondary,
+    backgroundSelected: PatiotuercaColors.primary,
+    textSecondary: PatiotuercaColors.muted,
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: PatiotuercaColors.text,
+    background: PatiotuercaColors.background,
+    backgroundElement: PatiotuercaColors.secondary,
+    backgroundSelected: PatiotuercaColors.primary,
+    textSecondary: PatiotuercaColors.muted,
   },
 } as const;
 
@@ -1395,16 +2365,27 @@ export function useTheme() {
 // -UseQuery: para consultas get
 //useMutation: para operaciones POST(PUT/DELETE)
 //useQueryClient: para interactuar con la cache(invalidar, refrecar)
-import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, useMutationState } from '@tanstack/react-query'
 import { carrosService } from '../api/carros.service'
+import type { Carro, CarroInput } from '../types/carro'
 
 //Definir una constante key que servira como identificador unico 
 //para las queries relacionadas con carros
-const KEY =['carros']
+const KEY = ['carros'] as const
+const DELETE_KEY = [...KEY, 'eliminar'] as const
+
+export function useCarrosEliminandoIds() {
+    const variables = useMutationState({
+        filters: { mutationKey: DELETE_KEY, status: 'pending' },
+        select: (mutation) => mutation.state.variables,
+    })
+
+    return variables.filter((id): id is string => typeof id === 'string')
+}
 
 export function useCarros(){
     return useQuery({
-        queryKey: ['carros'],
+        queryKey: KEY,
         queryFn: ()=>{
             console.log("GET ejecutado con tancstack")
             return carrosService.getAll()
@@ -1416,8 +2397,39 @@ export function useCarros(){
 export function useAgregarCarro(){
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (marca:string) => carrosService.add(marca),
-        onSuccess:() => qc.invalidateQueries({queryKey: KEY}),
+        mutationFn: (carro: CarroInput) => carrosService.add(carro),
+        onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    })
+}
+
+export function useEditarCarro(){
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ id, carro }: { id: string; carro: CarroInput }) =>
+            carrosService.update(id, carro),
+        onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    })
+}
+
+export function useEliminarCarro(){
+    const qc = useQueryClient()
+    return useMutation({
+        mutationKey: DELETE_KEY,
+        mutationFn: (id: string) => carrosService.remove(id),
+        onMutate: async (id) => {
+            await qc.cancelQueries({ queryKey: KEY })
+            const previousCarros = qc.getQueryData<Carro[]>(KEY)
+            qc.setQueryData<Carro[]>(KEY, (carros) =>
+                carros?.filter((carro) => carro.id !== id),
+            )
+            return { previousCarros }
+        },
+        onError: (_error, _id, context) => {
+            if (context?.previousCarros !== undefined) {
+                qc.setQueryData(KEY, context.previousCarros)
+            }
+        },
+        onSettled: () => qc.invalidateQueries({ queryKey: KEY }),
     })
 }
 
@@ -1425,10 +2437,31 @@ export function useAgregarCarro(){
 ðŸ“„ ARCHIVO: src\types\carro.ts
 ================================================
 
-export interface Carro{
+export interface Carro {
     id: string;
     marca: string;
+    anio: number;
+    modelo: string;
+    color: string;
+    kilometraje: number;
+    precio: number;
 }
+
+export type CarroInput = Omit<Carro, 'id'>;
+
+================================================
+ðŸ“„ ARCHIVO: src\utils\carros.ts
+================================================
+
+export function formatCarroNumber(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const number = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(number) ? number.toLocaleString('es-EC') : null;
+}
+
 
 ================================================
 ðŸ“„ ARCHIVO: tsconfig.json

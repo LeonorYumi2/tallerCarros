@@ -32,6 +32,11 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env 
+
+# Project specific exclusions
+contexto_proyecto.md
+export_context*
 
 # typescript
 *.tsbuildinfo
